@@ -4,15 +4,35 @@ import {
   resumeInputSchema,
   resumeProfileSchema,
 } from "@/lib/resume-schema";
+import { auth } from "@/lib/auth";
 
 export async function POST(request: Request) {
-  // This endpoint is currently intended for local development.
   const origin = request.headers.get("origin");
 
   if (origin && origin !== new URL(request.url).origin) {
     return NextResponse.json(
       { error: "Request origin rejected." },
       { status: 403 },
+    );
+  }
+
+  let session;
+
+  try {
+    session = await auth.api.getSession({
+      headers: request.headers,
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Cannot verify your session. Please try again." },
+      { status: 503 },
+    );
+  }
+
+  if (!session) {
+    return NextResponse.json(
+      { error: "Please log in to analyze your resume." },
+      { status: 401 },
     );
   }
 
@@ -31,7 +51,10 @@ export async function POST(request: Request) {
 
   if (!input.success) {
     return NextResponse.json(
-      { error: "Paste between 100 and 12,000 characters of resume text." },
+      {
+        error:
+          "Paste between 100 and 12,000 characters of resume text.",
+      },
       { status: 400 },
     );
   }
@@ -98,7 +121,10 @@ Rules:
     const result = await response.json();
 
     if (typeof result.message?.content !== "string") {
-      throw new Error("Missing model response.");
+      return NextResponse.json(
+        { error: "Ollama returned an empty or invalid response." },
+        { status: 502 },
+      );
     }
 
     let generated: unknown;
